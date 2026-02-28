@@ -36,4 +36,8 @@ public class TransactionService {
     public Collection<Transaction> getAll() {
         return store.values();
     }
+
+    public void clear() {
+        store.clear();
+    }
 }
