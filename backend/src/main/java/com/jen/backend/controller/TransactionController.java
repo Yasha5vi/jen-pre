@@ -10,7 +10,7 @@ import java.util.Collection;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/transactions")
+@RequestMapping("/api/transactions")
 public class TransactionController {
 
     private final TransactionService service;
