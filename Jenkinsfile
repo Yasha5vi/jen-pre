@@ -2,180 +2,82 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY = 'your-docker-registry' // Change to your Docker registry
-        FRONTEND_IMAGE = "${REGISTRY}/flakes-frontend:${BUILD_NUMBER}"
-        BACKEND_IMAGE = "${REGISTRY}/flakes-backend:${BUILD_NUMBER}"
-        DOCKER_CREDENTIALS = credentials('docker-hub-credentials')
+        AWS_REGION = "ap-south-1"
+        ACCOUNT_ID = "855806899620
+        BACKEND_REPO = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/flakes-backend"
+        FRONTEND_REPO = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/flakes-frontend"
     }
 
     options {
+        disableConcurrentBuilds()
         buildDiscarder(logRotator(numToKeepStr: '10'))
-        timeout(time: 30, unit: 'MINUTES')
-        timestamps()
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Checkout Code') {
             steps {
-                echo '=== Checking out code ==='
                 checkout scm
             }
         }
 
-        stage('Build Backend') {
+        stage('Get Commit SHA') {
             steps {
-                echo '=== Building Backend ==='
-                dir('backend') {
-                    sh 'mvn clean package -DskipTests'
+                script {
+                    COMMIT_SHA = sh(
+                        script: "git rev-parse --short HEAD",
+                        returnStdout: true
+                    ).trim()
                 }
             }
         }
 
-        stage('Build Frontend') {
+        stage('Login to ECR') {
             steps {
-                echo '=== Building Frontend ==='
-                dir('frontend') {
-                    sh 'npm install'
-                    sh 'npm run build'
-                }
+                sh """
+                aws ecr get-login-password --region ${AWS_REGION} | \
+                docker login --username AWS --password-stdin \
+                ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                """
             }
         }
 
-        stage('Test Backend') {
+        stage('Build Backend Image') {
             steps {
-                echo '=== Testing Backend ==='
-                dir('backend') {
-                    sh 'mvn test'
-                    junit 'target/surefire-reports/*.xml'
-                }
+                sh """
+                docker build -t flakes-backend ./backend
+                docker tag flakes-backend:latest ${BACKEND_REPO}:latest
+                docker tag flakes-backend:latest ${BACKEND_REPO}:${COMMIT_SHA}
+                """
             }
         }
 
-        stage('Test Frontend') {
+        stage('Build Frontend Image') {
             steps {
-                echo '=== Testing Frontend ==='
-                dir('frontend') {
-                    sh 'npm test -- --coverage --watchAll=false'
-                    publishHTML([
-                        reportDir: 'coverage/lcov-report',
-                        reportFiles: 'index.html',
-                        reportName: 'Frontend Coverage Report'
-                    ])
-                }
+                sh """
+                docker build -t flakes-frontend ./frontend
+                docker tag flakes-frontend:latest ${FRONTEND_REPO}:latest
+                docker tag flakes-frontend:latest ${FRONTEND_REPO}:${COMMIT_SHA}
+                """
             }
         }
 
-        stage('Code Quality (SonarQube)') {
-            when {
-                branch 'main'
-            }
+        stage('Push Images to ECR') {
             steps {
-                echo '=== Running SonarQube Analysis ==='
-                sh '''
-                    sonar-scanner \
-                        -Dsonar.projectKey=flakes \
-                        -Dsonar.sources=. \
-                        -Dsonar.host.url=${SONAR_HOST_URL} \
-                        -Dsonar.login=${SONAR_AUTH_TOKEN}
-                '''
-            }
-        }
-
-        stage('Build Docker Images') {
-            steps {
-                echo '=== Building Docker Images ==='
-                sh '''
-                    docker build -t ${FRONTEND_IMAGE} ./frontend
-                    docker build -t ${BACKEND_IMAGE} ./backend
-                '''
-            }
-        }
-
-        stage('Push Docker Images') {
-            when {
-                branch 'main'
-            }
-            steps {
-                echo '=== Pushing Docker Images ==='
-                sh '''
-                    echo ${DOCKER_CREDENTIALS_PSW} | docker login -u ${DOCKER_CREDENTIALS_USR} --password-stdin
-                    docker push ${FRONTEND_IMAGE}
-                    docker push ${BACKEND_IMAGE}
-                '''
-            }
-        }
-
-        stage('Deploy to Staging') {
-            when {
-                branch 'main'
-            }
-            steps {
-                echo '=== Deploying to Staging ==='
-                sh '''
-                    docker-compose -f docker-compose.yml up -d
-                    sleep 10
-                    curl http://localhost/health || exit 1
-                '''
-            }
-        }
-
-        stage('Integration Tests') {
-            when {
-                branch 'main'
-            }
-            steps {
-                echo '=== Running Integration Tests ==='
-                sh '''
-                    # Test frontend is accessible
-                    curl -f http://localhost/ || exit 1
-
-                    # Test backend health
-                    curl -f http://localhost:8080/transactions || exit 1
-
-                    # Test through nginx proxy
-                    curl -f http://localhost/api/transactions || exit 1
-                '''
-            }
-        }
-
-        stage('Deploy to Production') {
-            when {
-                branch 'main'
-                tag 'release-*'
-            }
-            steps {
-                echo '=== Deploying to Production (AWS) ==='
-                input 'Deploy to Production?'
-                sh '''
-                    aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com
-
-                    # Tag and push to ECR
-                    docker tag ${FRONTEND_IMAGE} ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/flakes-frontend:latest
-                    docker tag ${BACKEND_IMAGE} ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/flakes-backend:latest
-
-                    docker push ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/flakes-frontend:latest
-                    docker push ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/flakes-backend:latest
-
-                    # Update ECS services
-                    aws ecs update-service --cluster flakes-prod --service frontend --force-new-deployment
-                    aws ecs update-service --cluster flakes-prod --service backend --force-new-deployment
-                '''
+                sh """
+                docker push ${BACKEND_REPO}:latest
+                docker push ${BACKEND_REPO}:${COMMIT_SHA}
+                docker push ${FRONTEND_REPO}:latest
+                docker push ${FRONTEND_REPO}:${COMMIT_SHA}
+                """
             }
         }
     }
 
     post {
         always {
-            echo '=== Cleanup ==='
-            sh 'docker-compose down --remove-orphans || true'
+            sh 'docker system prune -f'
             cleanWs()
-        }
-        success {
-            echo '=== Pipeline Successful ==='
-        }
-        failure {
-            echo '=== Pipeline Failed ==='
         }
     }
 }
-
