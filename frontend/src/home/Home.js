@@ -5,7 +5,7 @@ import './Home.css';
 function Home() {
   return (
     <div className="home-container">
-      <h1>Flakes</h1>
+      <h1>Flakes Pay</h1>
       <p>Manage your transactions with ease</p>
       <div className="button-group">
         <Link to="/pay" className="btn btn-primary">
