@@ -1,4 +1,4 @@
-import { fetchWithCors, buildApiUrl } from '../config/corsConfig';
+import { fetchWithCors } from '../config/corsConfig';
 import API_CONFIG from '../config/constants';
 
 /**

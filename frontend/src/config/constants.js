@@ -1,25 +1,32 @@
 /**
  * API Configuration Constants
  * Centralized configuration for all API endpoints and settings
+ *
+ * Environments:
+ * - Development: localhost:8080 (direct backend)
+ * - Docker: localhost/api (through nginx reverse proxy)
+ * - Production: relative URL /api (through reverse proxy)
  */
 
-// API Base URL Configuration
-// Uses relative URL so it works in both development and production
 const getApiBaseUrl = () => {
-  const isDevelopment = process.env.NODE_ENV === 'development';
+  const environment = process.env.REACT_APP_ENVIRONMENT || process.env.NODE_ENV;
 
-  if (isDevelopment) {
-    // Development: backend on port 8080
-    return 'http://localhost:8080';
-  } else {
-    // Production: use relative URL (same domain as frontend)
-    // This will use the same origin as the frontend app
-    return '';
+  // Production: use relative URL with /api prefix (reverse proxy)
+  if (environment === 'production') {
+    return '/api';
   }
+
+  // Docker/Container (Jenkins CI/CD, Docker Compose): use reverse proxy URL
+  if (environment === 'docker' || environment === 'container') {
+    return 'http://localhost/api';
+  }
+
+  // Development: direct backend communication
+  return 'http://localhost:8080';
 };
 
 const API_CONFIG = {
-  // Backend API Base URL (relative URL for production)
+  // Backend API Base URL
   BASE_URL: getApiBaseUrl(),
 
   // API Endpoints
@@ -29,7 +36,7 @@ const API_CONFIG = {
 
   // CORS Configuration
   CORS: {
-    origin: true, // Allow any origin in development, backend controls in production
+    origin: true,
     credentials: 'include',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -37,7 +44,7 @@ const API_CONFIG = {
 
   // Request Configuration
   REQUEST: {
-    timeout: 30000, // 30 seconds
+    timeout: 30000,
     headers: {
       'Content-Type': 'application/json',
     },
@@ -50,7 +57,6 @@ const API_CONFIG = {
   },
 };
 
-// Environment-specific overrides
 if (process.env.REACT_APP_API_BASE_URL) {
   API_CONFIG.BASE_URL = process.env.REACT_APP_API_BASE_URL;
 }

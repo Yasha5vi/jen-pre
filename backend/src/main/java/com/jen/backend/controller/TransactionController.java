@@ -37,4 +37,9 @@ public class TransactionController {
         logger.info("Fetching all transactions");
         return ResponseEntity.ok(service.getAll());
     }
+
+    @RequestMapping(method = RequestMethod.OPTIONS)
+    public ResponseEntity<?> handleOptions() {
+        return ResponseEntity.ok().build();
+    }
 }
