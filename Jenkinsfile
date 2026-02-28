@@ -72,6 +72,17 @@ pipeline {
                 """
             }
         }
+
+        stage('Deploy to k3s') {
+            steps {
+                sh """
+                kubectl set image deployment/backend backend=${BACKEND_REPO}:${COMMIT_SHA}
+                kubectl set image deployment/frontend frontend=${FRONTEND_REPO}:${COMMIT_SHA}
+                kubectl rollout status deployment/backend
+                kubectl rollout status deployment/frontend
+                """
+            }
+        }
     }
 
     post {
