@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: backend
+  profiles:
+    active: dev
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: transaction-service
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
