@@ -51,9 +51,8 @@ public class CorsConfig implements WebMvcConfigurer {
             // Production: AWS domain or reverse proxy
             // Frontend accesses backend through reverse proxy (nginx/ALB)
             return new String[]{
-                "https://yourdomain.com",
-                "https://www.yourdomain.com",
-                "https://app.yourdomain.com"
+                    "http://13.201.16.100:30008",
+                    "http://13.201.16.100"
             };
         } else if ("docker".equalsIgnoreCase(environment) || "container".equalsIgnoreCase(environment)) {
             // Docker/Container (Jenkins, Docker Compose): Use service names
